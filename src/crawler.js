@@ -1,14 +1,34 @@
+require("dotenv").config();
+
 const TelegramBot = require("node-telegram-bot-api");
 const puppeteer = require("puppeteer");
+const StealthPlugin = require("puppeteer-extra-plugin-stealth");
+const AdblockerPlugin = require("puppeteer-extra-plugin-adblocker");
 
-const bot = new TelegramBot("6139652276:AAHk8k9T48au_qalk8_YjrEIkF5yAtXwAmo", {
-  polling: false,
-});
+const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { polling: false });
+const chatId = process.env.TELEGRAM_ID;
 
 async function verificarJogos() {
-  const navegador = await puppeteer.launch();
+  const browserOptions = {
+    headless: true,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-infobars",
+      "--disable-notifications",
+      "--disable-web-security",
+    ],
+  };
+
+  const puppeteerExtra = require("puppeteer-extra");
+  puppeteerExtra.use(StealthPlugin());
+  puppeteerExtra.use(AdblockerPlugin());
+  const navegador = await puppeteerExtra.launch(browserOptions);
   const pagina = await navegador.newPage();
-  await pagina.goto("https://www.sofascore.com/football/live-games");
+  await pagina.setDefaultNavigationTimeout(0);
+  await pagina.goto("https://www.sofascore.com/football/live-games", {
+    waitUntil: "networkidle0",
+  });
 
   const jogos = await pagina.evaluate(() => {
     const linhasDeJogos = document.querySelectorAll(
@@ -54,13 +74,13 @@ async function verificarJogos() {
       jogo.detalhes.includes("Shots on target") &&
       parseInt(jogo.detalhes.split(" ")[14]) >= 2 &&
       jogo.detalhes.includes("Shots inside the box") &&
-      parseInt(jogo.detalhes.split(" ")[17]) >= 1 &&
-      jogo.detalhes.includes("xG (expected goals)") &&
-      parseFloat(jogo.detalhes.split(" ")[21]) >= 2
+      parseInt(jogo.detalhes.split(" ")[17]) >= 1 //&&
+      // jogo.detalhes.includes('xG (expected goals)') &&
+      // parseFloat(jogo.detalhes.split(' ')[21]) >= 2
     ) {
       console.log(`Jogo encontrado: ${jogo.titulo}`);
       bot.sendMessage(
-        "937820810",
+        chatId,
         `Jogo encontrado: ${jogo.titulo}\nTempo: ${jogo.status}\nPlacar: ${
           jogo.detalhes.split(" - ")[0]
         } - ${jogo.detalhes.split(" - ")[1]}\nLink: ${jogo.url}`
